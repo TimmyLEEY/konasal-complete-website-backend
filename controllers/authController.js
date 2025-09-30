@@ -48,7 +48,7 @@ export const registerUser = async (req, res) => {
               Thanks for joining <strong>Konasal</strong>. Your account has been successfully created and you’re now part of our community 🚀.
             </p>
             <p style="text-align:center; margin:30px 0;">
-              <a href="${process.env.CLIENT_URL}/login"
+              <a href="${process.env.CLIENT_URL}login"
                  style="background:#004aad; color:#fff; padding:14px 28px; text-decoration:none; font-weight:bold; border-radius:6px; display:inline-block;">
                  Login to Your Account
               </a>
@@ -125,7 +125,7 @@ export const forgotPassword = async (req, res) => {
     user.resetTokenExpiry = resetTokenExpiry;
     await user.save();
 
-    const resetLink = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
+    const resetLink = `${process.env.CLIENT_URL}reset-password/${resetToken}`;
 
     const { data, error } = await resend.emails.send({
       from: FROM_EMAIL,
