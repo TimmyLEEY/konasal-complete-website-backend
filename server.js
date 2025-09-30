@@ -1,5 +1,8 @@
-import express from "express";
 import dotenv from "dotenv";
+dotenv.config();
+import express from "express";
+
+
 import cors from "cors";
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/auth.js";
@@ -8,7 +11,8 @@ import ebookRoutes from "./routes/ebookRoutes.js";
 
 
 
-dotenv.config();
+
+
 connectDB();
 
 const allowedOrigins = [
@@ -38,5 +42,5 @@ app.use("/api/forms", formsRoutes);
 app.use("/api/ebook", ebookRoutes);
 
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
