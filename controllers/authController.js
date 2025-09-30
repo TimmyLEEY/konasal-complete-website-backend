@@ -2,26 +2,16 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import crypto from "crypto";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-// ✅ Mailer setup (Gmail only with App Password)
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER, // your Gmail address
-    pass: process.env.EMAIL_PASS, // your Gmail App Password
-  },
-});
+// ✅ Setup Resend client
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Debug logs
-console.log("EMAIL_USER:", process.env.EMAIL_USER);
-console.log("EMAIL_PASS exists:", !!process.env.EMAIL_PASS);
-
-// Helper to choose sender email
-const getFromEmail = () => `"Konasal Support" <${process.env.EMAIL_USER}>`;
+// ✅ Always use the same sender (until domain is verified)
+const FROM_EMAIL = "Konasal Support <onboarding@konasalinsurance.com>";
 
 // ======================== REGISTER ========================
 export const registerUser = async (req, res) => {
@@ -38,57 +28,56 @@ export const registerUser = async (req, res) => {
     const newUser = new User({ name, email, password: hashedPassword });
     await newUser.save();
 
-    // ✅ Send Confirmation Email
-    const mailOptions = {
-      from: getFromEmail(),
-      to: newUser.email,
+    // ✅ Send email with Resend
+    const { data, error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: email,
       subject: "🎉 Welcome to Konasal – Your account is ready!",
       html: `
-          <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:40px; text-align:center;">
-        <table role="presentation" cellspacing="0" cellpadding="0" border="0" 
-               style="max-width:600px; margin:auto; background:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.08);">
-          <tr>
-            <td style="background:#004aad; padding:20px; text-align:center; color:#ffffff;">
-              <h1 style="margin:0; font-size:24px;">Konasal Insurance</h1>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:30px; text-align:left; color:#333;">
-              <h2 style="color:#004aad;">Welcome, ${newUser.name} 🎉</h2>
-              <p style="font-size:16px; line-height:1.6;">
-                Thank you for joining <strong>Konasal</strong>. 
-                Your account has been successfully created and you’re now part of our community 🚀.
-              </p>
-              <p style="font-size:16px; line-height:1.6;">
-                Click the button below to log in and start exploring:
-              </p>
-              <p style="text-align:center; margin:30px 0;">
-                <a href="${process.env.CLIENT_URL}/login" 
-                   style="background:#004aad; color:#ffffff; padding:14px 28px; text-decoration:none; font-weight:bold; border-radius:6px; display:inline-block;">
-                   Login to Your Account
-                </a>
-              </p>
-              <p style="font-size:14px; color:#666;">
-                If you did not sign up for this account, please ignore this email.
-              </p>
-            </td>
-          </tr>
-          <tr>
-            <td style="background:#f4f6f8; padding:20px; text-align:center; font-size:12px; color:#777;">
-              &copy; ${new Date().getFullYear()} Konasal Insurance. All rights reserved. <br/>
-              Need help? <a href="mailto:info@konasallp.com" style="color:#004aad; text-decoration:none;">Contact Support</a>
-            </td>
-          </tr>
-        </table>
-      </div>
+       <div style="font-family: 'Helvetica', Arial, sans-serif; background:#f4f6f8; padding:40px; text-align:center;">
+      <table style="max-width:600px; margin:auto; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.08);">
+        <tr>
+          <td style="background:#004aad; padding:20px; color:#fff; text-align:center;">
+            <h1 style="margin:0; font-size:24px;">Konasal Insurance</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:30px; text-align:left; color:#333;">
+            <h2 style="color:#004aad;">Welcome, ${name} 🎉</h2>
+            <p style="font-size:16px; line-height:1.6;">
+              Thanks for joining <strong>Konasal</strong>. Your account has been successfully created and you’re now part of our community 🚀.
+            </p>
+            <p style="text-align:center; margin:30px 0;">
+              <a href="${process.env.CLIENT_URL}/login"
+                 style="background:#004aad; color:#fff; padding:14px 28px; text-decoration:none; font-weight:bold; border-radius:6px; display:inline-block;">
+                 Login to Your Account
+              </a>
+            </p>
+            <p style="font-size:14px; color:#666;">
+              If you did not sign up for this account, please ignore this email.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f4f6f8; padding:20px; text-align:center; font-size:12px; color:#777;">
+            &copy; ${new Date().getFullYear()} Konasal Insurance. All rights reserved.<br/>
+            Need help? <a href="mailto:info@konasalinsurance.com" style="color:#004aad; text-decoration:none;">Contact Support</a>
+          </td>
+        </tr>
+      </table>
+    </div>
       `,
-    };
+    });
 
-    await transporter.sendMail(mailOptions);
+    if (error) {
+      console.error("❌ Resend error (register):", error);
+    } else {
+      console.log("✅ Resend success (register):", data);
+    }
 
-    res
-      .status(201)
-      .json({ message: "User registered successfully & confirmation email sent" });
+    res.status(201).json({
+      message: "User registered successfully & confirmation email sent",
+    });
   } catch (err) {
     console.error("Register error:", err);
     res.status(500).json({ message: err.message });
@@ -138,51 +127,51 @@ export const forgotPassword = async (req, res) => {
 
     const resetLink = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
 
-    const mailOptions = {
-      from: getFromEmail(),
+    const { data, error } = await resend.emails.send({
+      from: FROM_EMAIL,
       to: user.email,
       subject: "🔐 Reset Your Konasal Password",
       html: `
-         <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:40px; text-align:center;">
-        <table role="presentation" cellspacing="0" cellpadding="0" border="0" 
-               style="max-width:600px; margin:auto; background:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.08);">
-          <tr>
-            <td style="background:#004aad; padding:20px; text-align:center; color:#ffffff;">
-              <h1 style="margin:0; font-size:24px;">Konasal Insurance</h1>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:30px; text-align:left; color:#333;">
-              <h2 style="color:#004aad;">Password Reset Request</h2>
-              <p style="font-size:16px; line-height:1.6;">
-                Hello ${user.name}, we received a request to reset your password.
-              </p>
-              <p style="font-size:16px; line-height:1.6;">
-                If this was you, click the button below to securely reset your password:
-              </p>
-              <p style="text-align:center; margin:30px 0;">
-                <a href="${resetLink}" target="_blank"
-                   style="background:#e63946; color:#ffffff; padding:14px 28px; text-decoration:none; font-weight:bold; border-radius:6px; display:inline-block;">
-                   Reset Password
-                </a>
-              </p>
-              <p style="font-size:14px; color:#666;">
-                This link will expire in <strong>15 minutes</strong>. If you did not request a password reset, you can safely ignore this email.
-              </p>
-            </td>
-          </tr>
-          <tr>
-            <td style="background:#f4f6f8; padding:20px; text-align:center; font-size:12px; color:#777;">
-              &copy; ${new Date().getFullYear()} Konasal Insurance. All rights reserved. <br/>
-              Need help? <a href="mailto:support@konasal.com" style="color:#004aad; text-decoration:none;">Contact Support</a>
-            </td>
-          </tr>
-        </table>
-      </div>
+       <div style="font-family: 'Helvetica', Arial, sans-serif; background:#f4f6f8; padding:40px; text-align:center;">
+      <table style="max-width:600px; margin:auto; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.08);">
+        <tr>
+          <td style="background:#004aad; padding:20px; color:#fff; text-align:center;">
+            <h1 style="margin:0; font-size:24px;">Konasal Insurance</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:30px; text-align:left; color:#333;">
+            <h2 style="color:#004aad;">Password Reset Request</h2>
+            <p style="font-size:16px; line-height:1.6;">
+              Hello ${user.name}, we received a request to reset your password.
+            </p>
+            <p style="text-align:center; margin:30px 0;">
+              <a href="${resetLink}" target="_blank"
+                 style="background:#e63946; color:#fff; padding:14px 28px; text-decoration:none; font-weight:bold; border-radius:6px; display:inline-block;">
+                 Reset Password
+              </a>
+            </p>
+            <p style="font-size:14px; color:#666;">
+              This link will expire in <strong>15 minutes</strong>. If you did not request a password reset, you can safely ignore this email.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f4f6f8; padding:20px; text-align:center; font-size:12px; color:#777;">
+            &copy; ${new Date().getFullYear()} Konasal Insurance. All rights reserved.<br/>
+            Need help? <a href="mailto:support@konasalinsurance.com" style="color:#004aad; text-decoration:none;">Contact Support</a>
+          </td>
+        </tr>
+      </table>
+    </div>
       `,
-    };
+    });
 
-    await transporter.sendMail(mailOptions);
+    if (error) {
+      console.error("❌ Resend error (forgot):", error);
+    } else {
+      console.log("✅ Resend success (forgot):", data);
+    }
 
     res.json({ message: "Password reset email sent successfully" });
   } catch (err) {
