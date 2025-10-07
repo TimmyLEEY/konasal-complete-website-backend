@@ -17,7 +17,8 @@ connectDB();
 
 const allowedOrigins = [
   'http://localhost:3000',                       // local frontend
-  'https://konasalinsurance.netlify.app'        // deployed frontend
+  'https://konasalinsurance.netlify.app',
+  'https://www.konasallp.com'       // deployed frontend
 ];
 
 const app = express();
